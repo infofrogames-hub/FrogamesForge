@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { ImageUploader } from './components/ImageUploader';
 import { generateShopifyHtml } from './services/geminiService';
@@ -153,7 +152,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="bg-black/30 p-4 md:p-6 rounded-2xl border border-white/5">
                   <pre className="text-slate-300 text-[12px] md:text-[13px] leading-relaxed whitespace-pre-wrap font-sans font-medium text-left">
-                    {state.result.html3}
+                    {state.result.html3.replace(/\*\*/g, '')}
                   </pre>
                 </div>
               </div>
