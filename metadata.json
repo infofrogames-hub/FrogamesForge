@@ -1,0 +1,7 @@
+{
+  "name": "FroGames Shopify SEO Generator",
+  "description": "Un generatore di descrizioni prodotto Shopify SEO-friendly che analizza i colori della scatola del gioco tramite AI per creare layout HTML/CSS personalizzati e professionali.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
