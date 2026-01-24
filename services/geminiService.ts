@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { GenerationResult } from "../types";
 
@@ -38,9 +37,17 @@ export const generateShopifyHtml = async (
     - HTML3 (COME SI GIOCA): Deve essere puro TESTO (Plain Text). NON USARE TAG HTML. 
       Usa titoli in MAIUSCOLO per le sezioni principali. Per i grassetti usa i doppi asterischi (**testo**) in stile Markdown. Lascia spazi vuoti tra i paragrafi per la leggibilità. Deve essere pronto per un copia-incolla testuale pulito.
 
-    SEO:
-    - seoTitle: [Nome Gioco] - Strategia Avanzata | FroGames.
-    - metaDescription: Focus su profondità, rigiocabilità e sfida strategica.
+    SEO (MANDATORIO):
+    - seoTitle: crea un SEO Title INTELLIGENTE (max 70 caratteri) nel formato:
+      "[Nome Gioco] – [hook tematico/emozionale] + 1 keyword naturale (es. gioco da tavolo / cooperativo / investigativo / deckbuilding / party / ecc.)"
+      Regole:
+      - NON usare mai "Strategia Avanzata" o formule generiche ripetitive.
+      - NON ripetere due volte la stessa keyword.
+      - Usa sempre il trattino “–” e mai i due punti “:”.
+      - Se il gioco è family/party/coop, la keyword deve essere coerente (non “strategico” a caso).
+      - Se superi i 70 caratteri, riscrivi finché rientri.
+    - metaDescription: max 160 caratteri, include "[Nome Gioco]" + 1–2 keyword coerenti, tono FroGames, niente player count/durata, niente frasi generiche.
+      Se superi i 160 caratteri, riscrivi finché rientri.
 
     RISPOSTA: Solo JSON con "html1", "html2", "html3", "seoTitle", "metaDescription".
   `;
