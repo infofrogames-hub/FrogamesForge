@@ -146,10 +146,16 @@ const App: React.FC = () => {
               <div className="bg-slate-800/20 border border-slate-700/40 rounded-[24px] md:rounded-[32px] p-5 md:p-6">
                 <div className="flex justify-between items-center mb-4 md:mb-6">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-400">3. Come si Gioca (Testo)</h3>
-                  <button onClick={() => copy(state.result.html3, 'b3')} className="text-[10px] font-black uppercase text-indigo-300 hover:text-white">
+
+                  {/* ✅ QUI: copiamo la versione pulita, non quella con ** */}
+                  <button
+                    onClick={() => copy(state.result!.html3.replace(/\*\*/g, ''), 'b3')}
+                    className="text-[10px] font-black uppercase text-indigo-300 hover:text-white"
+                  >
                     {copyStates.b3 ? 'Copiato!' : 'Copia Testo'}
                   </button>
                 </div>
+
                 <div className="bg-black/30 p-4 md:p-6 rounded-2xl border border-white/5">
                   <pre className="text-slate-300 text-[12px] md:text-[13px] leading-relaxed whitespace-pre-wrap font-sans font-medium text-left">
                     {state.result.html3.replace(/\*\*/g, '')}
@@ -165,6 +171,7 @@ const App: React.FC = () => {
           )}
         </div>
       </div>
+
       <style>{`
         .shopify-preview-container {
           max-width: 100%;
