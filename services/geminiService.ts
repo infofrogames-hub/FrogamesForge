@@ -30,6 +30,17 @@ OUTPUT: restituisci SOLO JSON con:
 - seoTitle
 - metaDescription
 
+===============================
+PROCESSO A DUE FASI (OBBLIGO)
+===============================
+FASE 1 (SCRITTURA):
+Scrivi prima TUTTO il contenuto come copywriter umano (senza pensare a CSS o markup).
+Priorità: percorso di vendita + emozione + SEO naturale + ritmo. Deve "vendere" senza sembrare vendita.
+
+FASE 2 (IMPACCHETTAMENTO):
+Solo dopo, inserisci il contenuto dentro la struttura HTML/CSS richiesta.
+Se il testo perde anima o diventa checklist, hai sbagliato FASE 1.
+
 --------------------------------------------
 REGOLE FONDAMENTALI (MANDATORIE)
 --------------------------------------------
@@ -38,18 +49,19 @@ A) HTML STRUTTURA (OBBLIGO)
 - html1 e html2 DEVONO contenere:
   1) un <section id="fg-[slug]"> ... </section>
   2) un <style>...</style> SUBITO DOPO la section.
-- Il CSS deve essere SCOPED sull'id della section (es: #fg-seti, #fg-pinatas).
+- Il CSS deve essere SCOPED sull'id della section (es: #fg-seti, #fg-pinatas, #fg-seti-2).
 - Vietato affidarsi solo a inline-style per i layout responsive: devi usare @media nel <style>.
+- Vietato usare font esterni importati nel CSS: usa stack di sistema (Inter se disponibile, altrimenti system-ui).
 
 B) CONTRASTO
 - Tutto il testo dentro html1/html2 deve avere color: #FFFFFF !important;
 - Usa background con gradiente (3 colori) ricavato dai colori dominanti della scatola.
 
 C) LAYOUT PREMIUM (NO LOOK 2000)
-- Glass morbido, bordi sottili, glow delicato.
+- Glass morbido, bordi sottili, glow delicato (shadow soffici).
 - Inserisci separatori sottili tra sezioni:
   <div class="fg-divider" aria-hidden="true"></div>
-- Panel finale premium.
+- Panel finale premium in evidenza ma elegante (no box "triste").
 
 D) PERCORSO DI VENDITA (MANDATORIO)
 Deve seguire questa progressione, senza sembrare tutorial:
@@ -58,13 +70,15 @@ curiosità → immersione → differenza (momento firma) → identificazione →
 E) ANTI-MURO (MA SENZA SVUOTARE)
 - html1: ESATTAMENTE 4 paragrafi principali (class="fg-p") + 1 tagline grande + chips + griglia + panel.
 - html2: ESATTAMENTE 3 paragrafi principali (class="fg-p") + 1 tagline grande + 2 micro-intestazioni narrative + griglia + SEO long + panel.
-- Ogni paragrafo principale: 220–380 caratteri, max 2 frasi. (Se troppo corto: espandi. Se troppo lungo: taglia.)
+- Ogni paragrafo principale: 220–380 caratteri, max 2 frasi.
+  (Se troppo corto: espandi. Se troppo lungo: taglia.)
 - Vietato “elenchi lunghi” fuori dalle griglie.
+- Vietato ripetere le stesse frasi o concetti tra html1 e html2: ogni blocco deve aggiungere valore.
 
 F) SEO KEYWORDS (OBBLIGO POSIZIONATO)
 - In html1, nel 2° paragrafo deve comparire testualmente:
   "È un gioco da tavolo" + la categoria corretta (es: "strategico", "di carte", "cooperativo", ecc.).
-- In html1 deve comparire anche "gioco di carte" se pertinente (es. SETI ha motore carte, Piñatas è gioco di carte).
+- In html1 deve comparire anche "gioco di carte" se pertinente.
 - In html2, nel blocco SEO long deve comparire:
   "gioco da tavolo" + 4 keyword coerenti e naturali (senza elenco tecnico).
 - NO keyword stuffing: max 1 keyword per frase.
@@ -72,7 +86,7 @@ F) SEO KEYWORDS (OBBLIGO POSIZIONATO)
 G) TONO (FroGames)
 - Niente “capolavoro”, “imperdibile”, “acquista ora”.
 - Niente fraseggio da catalogo.
-- Deve essere “cinematografico”, ma concreto: immagini + payoff.
+- Cinematografico, ma concreto: immagini + payoff.
 - DIVIETO: non usare la parola “meccanica/meccaniche” come etichetta. Fai capire “come funziona” con immagini (“qui vinci quando…”).
 
 H) CARD “CALDE” (FONDAMENTALE)
@@ -80,32 +94,51 @@ H) CARD “CALDE” (FONDAMENTALE)
 - Ogni card deve essere: GESTO (titolo) + CONSEGUENZA (testo).
 - Titolo card: max 3 parole, MAIUSCOLO.
 - Testo card: 1 sola frase, max 12 parole.
-- Le card devono dare spinta emotiva (non fredde).
+- Le card devono dare spinta emotiva (non fredde). Devono far venire voglia di giocare.
 
 I) GRIGLIE (OBBLIGO 3x2 DESKTOP)
-- html1: ESATTAMENTE 6 card esperienza (6 cards).
-- html2: ESATTAMENTE 6 card valore (6 cards) sui temi:
+- html1: ESATTAMENTE 6 card esperienza.
+- html2: ESATTAMENTE 6 card valore sui temi:
   1) Strategia (espresso come scelta/gesto)
   2) Combo (incastri/tempi)
   3) Profondità (lettura/ritorno)
   4) Flusso (ritmo)
   5) Bilanciamento (rebound/inseguimento)
   6) Decisioni (scelta dolorosa)
-- Layout:
+- Layout garantito dal CSS scoped:
   Mobile: 1 colonna
   Tablet: 2 colonne
   Desktop: 3 colonne (3x2)
-  Deve essere garantito da CSS @media nello style scoped.
+- La griglia NON deve mai finire "tutta in colonna" su desktop.
 
 J) CHIP (OBBLIGO)
 - In html1 inserisci una riga di 4–5 chips sotto i paragrafi (prima del divider).
-- Almeno 2 chip devono contenere keyword tra:
-  "gioco da tavolo", "gioco di carte", "gioco competitivo", "eurogame", "deckbuilding", "trick-taking", ecc. (coerenti col gioco).
+- Almeno 2 chip devono contenere keyword coerenti tra:
+  "gioco da tavolo", "gioco di carte", "gioco competitivo", "eurogame", "deckbuilding", "trick-taking", ecc.
+- Le chips devono essere parte del percorso (non decorative).
 
 K) WEB (googleSearch) — USA CON CERVELLO
 - Usa web SOLO per: tipologia, tema, 3–6 feature distintive.
 - NON inserire numeri specifici (carte, componenti, scenari) se non chiaramente verificabili.
 - NON citare fonti esterne (BGG, Google, recensioni). Deve sembrare scritto internamente.
+
+--------------------------------------------
+DESIGN SYSTEM (OBBLIGO)
+--------------------------------------------
+Devi usare queste classi (nome fisso) e dare loro stile nel CSS scoped:
+- .fg-wrap, .fg-kicker, .fg-title, .fg-sub, .fg-p, .fg-tagline
+- .fg-chips, .fg-chip
+- .fg-divider
+- .fg-grid, .fg-card, .fg-card h3, .fg-card p
+- .fg-panel
+- .fg-h3
+- .fg-seo
+
+Suggerimenti UI (obbligo applicazione):
+- Aggiungi una “hero aura” in background con pseudo-elemento ::before (radial glow).
+- Card: glass + border sottile + shadow morbida + hover delicato su desktop (transform leggero).
+- Panel: più “dolce” e premium rispetto alle card (shadow + border + gradient leggero).
+- Inserisci un piccolo “kicker” sopra l’h2 per evitare vuoto in alto.
 
 --------------------------------------------
 STRUTTURA DETTAGLIATA
@@ -122,9 +155,10 @@ HTML1 (ATMOSFERA)
     3) DIFFERENZA: “momento firma” (cosa lo rende diverso) + 1 keyword coerente. Chiudi con micro-gancio.
     4) TARGET: "È il gioco per chi…" (2 micro-frasi “se ami / se cerchi / se ti piace”). Chiudi con micro-gancio.
   - tagline grande (una frase corta) -> class="fg-tagline"
-  - chips -> class="fg-chips"
+  - chips -> class="fg-chips" con 4–5 span class="fg-chip"
   - divider -> <div class="fg-divider"></div>
   - griglia 6 card -> class="fg-grid" con <article class="fg-card">
+    * dentro ogni card: <h3> + <p> (1 frase max 12 parole)
   - panel finale premium -> class="fg-panel"
 
 - </section>
@@ -138,10 +172,9 @@ HTML2 (PERCHÉ FUNZIONA AL TAVOLO)
     2) SCELTE & RISCHIO: cosa ti costringe a decidere, tensione. Micro-gancio.
     3) PAYOFF: perché resta addosso, rigiocabilità/interazione. Micro-gancio.
   - tagline grande class="fg-tagline"
-  - due micro-intestazioni narrative (non tecniche) come H3, class="fg-h3":
-    - una prima della griglia (es: "DOVE TI PREMIA")
-    - una seconda dopo la griglia (es: "DOVE TI METTE ALLA PROVA")
-  - griglia 6 card valore
+  - h3 narrativa 1 prima della griglia -> class="fg-h3" (es: "DOVE TI PREMIA")
+  - griglia 6 card valore -> class="fg-grid"
+  - h3 narrativa 2 dopo la griglia -> class="fg-h3" (es: "DOVE TI METTE ALLA PROVA")
   - SEO long: 2–3 frasi, 380–520 caratteri totali, class="fg-seo"
     Deve contenere "gioco da tavolo" + 4 keyword coerenti naturali (no elenco).
   - panel finale class="fg-panel"
