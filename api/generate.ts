@@ -16,7 +16,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 900 }
+          generationConfig: {
+            maxOutputTokens: 1200,
+            temperature: 0.7,
+            topP: 0.9
+          }
         })
       }
     );
@@ -27,9 +31,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(r.status).json({ error: data?.error?.message || 'Gemini error', raw: data });
     }
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    let text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+
+    // Converti Markdown bold **...** in <strong>...</strong> (Shopify-friendly)
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+    // (Opzionale) Liste numerate markdown "1. " -> "1) "
+    text = text.replace(/^(\s*)(\d+)\.\s+/gm, '$1$2) ');
+
+    // Pulizia a capo e spazi
+    text = text.replace(/\n{4,}/g, '\n\n\n').trim();
+
     return res.status(200).json({ text });
-  } catch {
-    return res.status(500).json({ error: 'Request failed' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Request failed', detail: String(err?.message || err) });
   }
 }
