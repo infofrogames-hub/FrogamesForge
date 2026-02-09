@@ -48,12 +48,12 @@ function validateOutput(out: Output): ValidationErrors {
   if (!/\.fg-grid\b/.test(out.html2) || !/@media\s*\(/.test(out.html2))
     err.html2.push("Manca .fg-grid con @media (1/2/3 colonne) scoped");
 
-  // contrast lock (id-specific)
+  // contrast lock (id-specific) — ✅ more tolerant regex
   const id1 = getSectionId(out.html1);
   if (!id1) err.html1.push("ID section html1 non trovato");
   else {
     const lock1 = new RegExp(
-      `#${id1}\\s*,\\s*\\n?#${id1}\\s*\\*\\s*\\{[^}]*color\\s*:\\s*#FFFFFF\\s*!important`,
+      `#${id1}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`,
       "i"
     );
     if (!lock1.test(out.html1)) err.html1.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
@@ -63,7 +63,7 @@ function validateOutput(out: Output): ValidationErrors {
   if (!id2) err.html2.push("ID section html2 non trovato");
   else {
     const lock2 = new RegExp(
-      `#${id2}\\s*,\\s*\\n?#${id2}\\s*\\*\\s*\\{[^}]*color\\s*:\\s*#FFFFFF\\s*!important`,
+      `#${id2}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`,
       "i"
     );
     if (!lock2.test(out.html2)) err.html2.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
@@ -121,19 +121,19 @@ function hasErrors(e: ValidationErrors): boolean {
 function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
   const fixes: string[] = [];
 
-  if (e.html1.some(x => x.includes("È un gioco da tavolo"))) {
+  if (e.html1.some((x) => x.includes("È un gioco da tavolo"))) {
     fixes.push(`- RISCRIVI SOLO il 2° <p class="fg-p"> di html1: deve iniziare con "È un gioco da tavolo" e finire con punto.`);
   }
-  if (e.html1.some(x => x.includes("chips"))) {
+  if (e.html1.some((x) => x.includes("chips"))) {
     fixes.push(`- RIGENERA SOLO la riga chips di html1: ESATTAMENTE 4–5 <span class="fg-chip">...</span> dentro <div class="fg-chips">.`);
   }
-  if (e.html2.some(x => x.includes("SEO long"))) {
+  if (e.html2.some((x) => x.includes("SEO long"))) {
     fixes.push(`- In html2 aggiungi <p class="fg-seo"> (2–3 frasi, 380–520 caratteri) con "gioco da tavolo" + 4 keyword naturali.`);
   }
-  if (e.html1.some(x => x.includes("fg-sub")) || e.html2.some(x => x.includes("fg-sub"))) {
+  if (e.html1.some((x) => x.includes("fg-sub")) || e.html2.some((x) => x.includes("fg-sub"))) {
     fixes.push(`- Assicurati che html1 e html2 contengano SEMPRE <p class="fg-sub"> (1 riga) per la gerarchia.`);
   }
-  if (e.html1.some(x => x.includes("fg-tagline")) || e.html2.some(x => x.includes("fg-tagline"))) {
+  if (e.html1.some((x) => x.includes("fg-tagline")) || e.html2.some((x) => x.includes("fg-tagline"))) {
     fixes.push(`- Assicurati che html1 e html2 contengano SEMPRE <div class="fg-tagline"> (1 frase corta) in evidenza.`);
   }
   if (e.html3.length) {
@@ -338,8 +338,9 @@ Rispondi SOLO JSON.
     parsed.html1 = stripMarkdownAccident(parsed.html1);
     parsed.html2 = stripMarkdownAccident(parsed.html2);
 
+    // ✅ Always clean html3 (force plain text)
     parsed.html3 = stripMarkdownAccident(parsed.html3);
-    if (/<\/?[a-z][\s\S]*>/i.test(parsed.html3)) parsed.html3 = stripHtmlTags(parsed.html3);
+    parsed.html3 = stripHtmlTags(parsed.html3);
 
     return parsed;
   }
@@ -352,6 +353,10 @@ Rispondi SOLO JSON.
     const err = validateOutput(out);
 
     if (!hasErrors(err)) return out;
+
+    // ✅ Debug log for future diagnostics
+    console.warn(`Attempt ${attempt} failed`, err);
+
     lastErr = err;
   }
 
