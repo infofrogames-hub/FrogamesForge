@@ -25,7 +25,7 @@ function getSectionId(html: string): string | null {
   return m?.[1] ?? null;
 }
 
-// ✅ NEW: deterministic meta sanitization (prevents ":" forever)
+// ✅ Deterministic meta sanitization (prevents ":" + length overflow)
 function sanitizeSeoTitle(input: string): string {
   const t = (input ?? "")
     .replace(/:/g, " – ")
@@ -152,7 +152,7 @@ function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
     fixes.push(`- Assicurati che html1 e html2 contengano SEMPRE <div class="fg-tagline"> (1 frase corta) in evidenza.`);
   }
 
-  // ✅ FIX 1: CONTRAST LOCK (manca nei tuoi errori reali)
+  // ✅ FIX 1: CONTRAST LOCK
   if (e.html1.some((x) => x.includes("contrast lock")) || e.html2.some((x) => x.includes("contrast lock"))) {
     fixes.push(
       `- CONTRAST LOCK OBBLIGATORIO: in html1 e html2, dentro lo <style>, la PRIMA regola deve essere ESATTAMENTE:` +
@@ -165,7 +165,7 @@ function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
     fixes.push(`- html3: SOLO TESTO PURO (no HTML, no markdown, no asterischi).`);
   }
 
-  // ✅ FIX 2: SEO TITLE (71 chars e ":" sono i tuoi errori reali)
+  // ✅ FIX 2: META
   if (e.meta.length) {
     fixes.push(
       `- RISCRIVI SOLO seoTitle e metaDescription rispettando: seoTitle ≤ 70 caratteri, NON usare ":" ma "–". ` +
@@ -205,7 +205,6 @@ export const generateShopifyHtml = async (
     inlineData: { mimeType: "image/jpeg", data: base64Data },
   };
 
-  // ✅ Prompt “elegante”: blocca la gerarchia e il look con blueprint CSS
   const basePrompt = `
 Agisci come Master Copywriter SEO e Lead UI Designer per FroGames.
 Analizza i colori della scatola nell'immagine e il tema del gioco: ${bggInfo}.
@@ -368,12 +367,12 @@ Rispondi SOLO JSON.
     parsed.html1 = stripMarkdownAccident(parsed.html1);
     parsed.html2 = stripMarkdownAccident(parsed.html2);
 
-    // ✅ Deterministically prevent ":" and length overflow in seoTitle
-    parsed.seoTitle = sanitizeSeoTitle(parsed.seoTitle);
-
     // ✅ Always clean html3 (force plain text)
     parsed.html3 = stripMarkdownAccident(parsed.html3);
     parsed.html3 = stripHtmlTags(parsed.html3);
+
+    // ✅ Deterministically prevent ":" and length overflow in seoTitle
+    parsed.seoTitle = sanitizeSeoTitle(parsed.seoTitle);
 
     return parsed;
   }
@@ -383,6 +382,10 @@ Rispondi SOLO JSON.
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const prompt = attempt === 1 ? basePrompt : buildRepairPrompt(basePrompt, lastErr!);
     const out = await callModel(prompt);
+
+    // ✅ Hard guarantee: even if callModel is bypassed/old bundle, sanitize before validation
+    out.seoTitle = sanitizeSeoTitle(out.seoTitle);
+
     const err = validateOutput(out);
 
     if (!hasErrors(err)) return out;
