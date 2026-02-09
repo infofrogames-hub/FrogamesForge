@@ -25,6 +25,21 @@ function getSectionId(html: string): string | null {
   return m?.[1] ?? null;
 }
 
+// ✅ NEW: deterministic meta sanitization (prevents ":" forever)
+function sanitizeSeoTitle(input: string): string {
+  const t = (input ?? "")
+    .replace(/:/g, " – ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (t.length <= 70) return t;
+
+  // Best-effort: don't cut the last word if possible
+  const cut = t.slice(0, 70);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
 type ValidationErrors = {
   html1: string[];
   html2: string[];
@@ -52,20 +67,14 @@ function validateOutput(out: Output): ValidationErrors {
   const id1 = getSectionId(out.html1);
   if (!id1) err.html1.push("ID section html1 non trovato");
   else {
-    const lock1 = new RegExp(
-      `#${id1}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`,
-      "i"
-    );
+    const lock1 = new RegExp(`#${id1}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`, "i");
     if (!lock1.test(out.html1)) err.html1.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
   }
 
   const id2 = getSectionId(out.html2);
   if (!id2) err.html2.push("ID section html2 non trovato");
   else {
-    const lock2 = new RegExp(
-      `#${id2}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`,
-      "i"
-    );
+    const lock2 = new RegExp(`#${id2}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`, "i");
     if (!lock2.test(out.html2)) err.html2.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
   }
 
@@ -144,10 +153,7 @@ function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
   }
 
   // ✅ FIX 1: CONTRAST LOCK (manca nei tuoi errori reali)
-  if (
-    e.html1.some((x) => x.includes("contrast lock")) ||
-    e.html2.some((x) => x.includes("contrast lock"))
-  ) {
+  if (e.html1.some((x) => x.includes("contrast lock")) || e.html2.some((x) => x.includes("contrast lock"))) {
     fixes.push(
       `- CONTRAST LOCK OBBLIGATORIO: in html1 e html2, dentro lo <style>, la PRIMA regola deve essere ESATTAMENTE:` +
         ` "#SECTION_ID, #SECTION_ID * { color:#FFFFFF !important; }" dove SECTION_ID è l'id reale scritto nella rispettiva <section id="...">.` +
@@ -160,7 +166,6 @@ function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
   }
 
   // ✅ FIX 2: SEO TITLE (71 chars e ":" sono i tuoi errori reali)
-  // Se il meta validator segnala qualsiasi errore meta, forziamo la riscrittura SOLO dei meta.
   if (e.meta.length) {
     fixes.push(
       `- RISCRIVI SOLO seoTitle e metaDescription rispettando: seoTitle ≤ 70 caratteri, NON usare ":" ma "–". ` +
@@ -362,6 +367,9 @@ Rispondi SOLO JSON.
 
     parsed.html1 = stripMarkdownAccident(parsed.html1);
     parsed.html2 = stripMarkdownAccident(parsed.html2);
+
+    // ✅ Deterministically prevent ":" and length overflow in seoTitle
+    parsed.seoTitle = sanitizeSeoTitle(parsed.seoTitle);
 
     // ✅ Always clean html3 (force plain text)
     parsed.html3 = stripMarkdownAccident(parsed.html3);
