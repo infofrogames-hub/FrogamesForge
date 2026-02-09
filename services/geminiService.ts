@@ -5,29 +5,26 @@ type Output = GenerationResult;
 const MAX_ATTEMPTS = 3;
 
 function stripMarkdownAccident(input: string): string {
-  return input
+  return (input ?? "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/`{1,3}([^`]+)`{1,3}/g, "$1")
     .trim();
 }
 
 function stripHtmlTags(input: string): string {
-  return input.replace(/<\/?[^>]+>/g, "").replace(/\n{3,}/g, "\n\n").trim();
+  return (input ?? "").replace(/<\/?[^>]+>/g, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function countMatches(haystack: string, re: RegExp): number {
-  const m = haystack.match(re);
+  const m = (haystack ?? "").match(re);
   return m ? m.length : 0;
 }
 
 function getSectionId(html: string): string | null {
-  const m = html.match(/<section\s+id="([^"]+)"/i);
+  const m = (html ?? "").match(/<section\s+id="([^"]+)"/i);
   return m?.[1] ?? null;
 }
 
-/* ============================
-   SEO TITLE SANITIZATION
-   ============================ */
 function normalizeSeoTitle(input: string): string {
   return (input ?? "")
     .replace(/:/g, " – ")
@@ -38,10 +35,8 @@ function normalizeSeoTitle(input: string): string {
 function clamp(input: string, max: number): string {
   const s = (input ?? "").trim();
   if (s.length <= max) return s;
-  // taglia senza spezzare l’ultima parola
   return s.slice(0, max).replace(/\s+\S*$/, "").trim();
 }
-/* ============================ */
 
 type ValidationErrors = {
   html1: string[];
@@ -54,69 +49,69 @@ function validateOutput(out: Output): ValidationErrors {
   const err: ValidationErrors = { html1: [], html2: [], html3: [], meta: [] };
 
   // base structure
-  if (!out.html1.includes('<section id="fg-')) err.html1.push('Manca <section id="fg-');
-  if (!out.html2.includes('<section id="fg-')) err.html2.push('Manca <section id="fg-');
+  if (!out.html1?.includes('<section id="fg-')) err.html1.push('Manca <section id="fg-');
+  if (!out.html2?.includes('<section id="fg-')) err.html2.push('Manca <section id="fg-');
 
-  if (!out.html1.includes("<style>") || !out.html1.includes("</style>")) err.html1.push("Manca <style>...</style>");
-  if (!out.html2.includes("<style>") || !out.html2.includes("</style>")) err.html2.push("Manca <style>...</style>");
+  if (!out.html1?.includes("<style>") || !out.html1?.includes("</style>")) err.html1.push("Manca <style>...</style>");
+  if (!out.html2?.includes("<style>") || !out.html2?.includes("</style>")) err.html2.push("Manca <style>...</style>");
 
   // grid + media
-  if (!/\.fg-grid\b/.test(out.html1) || !/@media\s*\(/.test(out.html1))
+  if (!/\.fg-grid\b/.test(out.html1 ?? "") || !/@media\s*\(/.test(out.html1 ?? ""))
     err.html1.push("Manca .fg-grid con @media (1/2/3 colonne) scoped");
-  if (!/\.fg-grid\b/.test(out.html2) || !/@media\s*\(/.test(out.html2))
+  if (!/\.fg-grid\b/.test(out.html2 ?? "") || !/@media\s*\(/.test(out.html2 ?? ""))
     err.html2.push("Manca .fg-grid con @media (1/2/3 colonne) scoped");
 
-  // contrast lock (id-specific) — tolerant
-  const id1 = getSectionId(out.html1);
+  // contrast lock (tolerant)
+  const id1 = getSectionId(out.html1 ?? "");
   if (!id1) err.html1.push("ID section html1 non trovato");
   else {
     const lock1 = new RegExp(`#${id1}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`, "i");
-    if (!lock1.test(out.html1)) err.html1.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
+    if (!lock1.test(out.html1 ?? "")) err.html1.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
   }
 
-  const id2 = getSectionId(out.html2);
+  const id2 = getSectionId(out.html2 ?? "");
   if (!id2) err.html2.push("ID section html2 non trovato");
   else {
     const lock2 = new RegExp(`#${id2}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`, "i");
-    if (!lock2.test(out.html2)) err.html2.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
+    if (!lock2.test(out.html2 ?? "")) err.html2.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
   }
 
   // no markdown
-  if (/\*\*|```|`/.test(out.html1)) err.html1.push("Contiene markdown (** o `)");
-  if (/\*\*|```|`/.test(out.html2)) err.html2.push("Contiene markdown (** o `)");
-  if (/\*\*|```|`/.test(out.html3)) err.html3.push("html3 contiene markdown (vietato)");
+  if (/\*\*|```|`/.test(out.html1 ?? "")) err.html1.push("Contiene markdown (** o `)");
+  if (/\*\*|```|`/.test(out.html2 ?? "")) err.html2.push("Contiene markdown (** o `)");
+  if (/\*\*|```|`/.test(out.html3 ?? "")) err.html3.push("html3 contiene markdown (vietato)");
 
   // html3 must be plain text
-  if (/<\/?[a-z][\s\S]*>/i.test(out.html3)) err.html3.push("html3 contiene HTML (vietato)");
+  if (/<\/?[a-z][\s\S]*>/i.test(out.html3 ?? "")) err.html3.push("html3 contiene HTML (vietato)");
 
   // paragraphs exact
-  const p1 = out.html1.match(/<p\s+class="fg-p">[\s\S]*?<\/p>/gi) ?? [];
+  const p1 = (out.html1 ?? "").match(/<p\s+class="fg-p">[\s\S]*?<\/p>/gi) ?? [];
   if (p1.length !== 4) err.html1.push(`html1 deve avere 4 paragrafi fg-p (trovati ${p1.length})`);
   if (p1.length >= 2 && !p1[1].includes("È un gioco da tavolo"))
     err.html1.push('Manca “È un gioco da tavolo” nel 2° paragrafo');
 
-  const p2 = out.html2.match(/<p\s+class="fg-p">[\s\S]*?<\/p>/gi) ?? [];
+  const p2 = (out.html2 ?? "").match(/<p\s+class="fg-p">[\s\S]*?<\/p>/gi) ?? [];
   if (p2.length !== 3) err.html2.push(`html2 deve avere 3 paragrafi fg-p (trovati ${p2.length})`);
 
   // seo long
-  if (!/class="fg-seo"/.test(out.html2)) err.html2.push("Manca blocco SEO long .fg-seo");
+  if (!/class="fg-seo"/.test(out.html2 ?? "")) err.html2.push("Manca blocco SEO long .fg-seo");
 
   // cards count
-  const c1 = countMatches(out.html1, /class="fg-card"/g);
+  const c1 = countMatches(out.html1 ?? "", /class="fg-card"/g);
   if (c1 !== 6) err.html1.push("html1 deve avere 6 card");
 
-  const c2 = countMatches(out.html2, /class="fg-card"/g);
+  const c2 = countMatches(out.html2 ?? "", /class="fg-card"/g);
   if (c2 !== 6) err.html2.push("html2 deve avere 6 card");
 
   // chips count
-  const chips = countMatches(out.html1, /class="fg-chip"/g);
+  const chips = countMatches(out.html1 ?? "", /class="fg-chip"/g);
   if (chips < 4 || chips > 5) err.html1.push(`html1 chips devono essere 4–5 (trovate ${chips})`);
 
   // hierarchy checks
-  if (!/class="fg-sub"/.test(out.html1)) err.html1.push("Manca fg-sub");
-  if (!/class="fg-tagline"/.test(out.html1)) err.html1.push("Manca fg-tagline");
-  if (!/class="fg-sub"/.test(out.html2)) err.html2.push("Manca fg-sub");
-  if (!/class="fg-tagline"/.test(out.html2)) err.html2.push("Manca fg-tagline");
+  if (!/class="fg-sub"/.test(out.html1 ?? "")) err.html1.push("Manca fg-sub");
+  if (!/class="fg-tagline"/.test(out.html1 ?? "")) err.html1.push("Manca fg-tagline");
+  if (!/class="fg-sub"/.test(out.html2 ?? "")) err.html2.push("Manca fg-sub");
+  if (!/class="fg-tagline"/.test(out.html2 ?? "")) err.html2.push("Manca fg-tagline");
 
   // meta limits
   if ((out.seoTitle ?? "").length > 70) err.meta.push(`seoTitle > 70 (${out.seoTitle.length})`);
@@ -130,21 +125,22 @@ function hasErrors(e: ValidationErrors): boolean {
   return Boolean(e.html1.length || e.html2.length || e.html3.length || e.meta.length);
 }
 
-/* ============================
-   ✅ ONLY CHANGE: smarter repair
-   If structural errors exist => FULL REGEN
-   ============================ */
-function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
+// ✅ FULL-REGEN detector migliorato: include anche output vuoti
+function buildRepairPrompt(basePrompt: string, e: ValidationErrors, lastOut?: Output): string {
   const all = [...e.html1, ...e.html2, ...e.html3, ...e.meta];
 
+  const emptyHtml =
+    !lastOut?.html1?.trim() ||
+    !lastOut?.html2?.trim();
+
   const hasStructuralFailure =
+    emptyHtml ||
     all.some((x) => x.includes('Manca <section id="fg-')) ||
     all.some((x) => x.includes("Manca <style>")) ||
     all.some((x) => x.includes("Manca .fg-grid")) ||
     all.some((x) => x.includes("ID section")) ||
     all.some((x) => x.includes("paragrafi fg-p (trovati 0)"));
 
-  // Se manca la struttura, NON micro-riparare: rigenera tutto.
   if (hasStructuralFailure) {
     return `
 ${basePrompt}
@@ -152,32 +148,29 @@ ${basePrompt}
 ================================================
 REPAIR (ALTISSIMA PRIORITÀ)
 ================================================
-La struttura è stata violata (section/style/grid/paragraphs mancanti).
-RIGENERA COMPLETAMENTE l'output rispettando TUTTI i vincoli e la STRUTTURA OBBLIGATORIA.
-Non fare micro-fix. Non spiegare nulla. Rispondi SOLO JSON valido.
+Hai violato la STRUTTURA OBBLIGATORIA (section/style/grid/gerarchia/paragrafi mancanti o output vuoto).
+RIGENERA COMPLETAMENTE rispettando ESATTAMENTE la STRUTTURA richiesta per html1 e html2:
+- <section id="fg-[slug]"> ... </section> + <style>...</style>
+- <section id="fg-[slug]-2"> ... </section> + <style>...</style>
+- 4 paragrafi fg-p in html1, 3 paragrafi fg-p in html2
+- 6 card in html1, 6 card in html2
+- chips 4–5 span.fg-chip
+- fg-sub e fg-tagline presenti
+Rispondi SOLO JSON valido. Nessuna spiegazione.
 `.trim();
   }
 
-  // altrimenti micro-fix come prima
+  // micro-fix (come avevi)
   const fixes: string[] = [];
 
   if (e.html1.some((x) => x.includes("È un gioco da tavolo"))) {
-    fixes.push(
-      `- RISCRIVI SOLO il 2° <p class="fg-p"> di html1: deve iniziare con "È un gioco da tavolo" e finire con punto.`
-    );
+    fixes.push(`- RISCRIVI SOLO il 2° <p class="fg-p"> di html1: deve iniziare con "È un gioco da tavolo" e finire con punto.`);
   }
   if (e.html1.some((x) => x.includes("chips"))) {
-    fixes.push(
-      `- RIGENERA SOLO la riga chips di html1: ESATTAMENTE 4–5 <span class="fg-chip">...</span> dentro <div class="fg-chips">.`
-    );
+    fixes.push(`- RIGENERA SOLO la riga chips di html1: ESATTAMENTE 4–5 <span class="fg-chip">...</span> dentro <div class="fg-chips">.`);
   }
   if (e.html2.some((x) => x.includes("SEO long"))) {
-    fixes.push(
-      `- In html2 aggiungi <p class="fg-seo"> (2–3 frasi, 380–520 caratteri) con "gioco da tavolo" + 4 keyword naturali.`
-    );
-  }
-  if (e.html3.length) {
-    fixes.push(`- html3: SOLO TESTO PURO (no HTML, no markdown, no asterischi).`);
+    fixes.push(`- In html2 aggiungi <p class="fg-seo"> (2–3 frasi, 380–520 caratteri) con "gioco da tavolo" + 4 keyword naturali.`);
   }
   if (e.meta.length) {
     fixes.push(`- seoTitle ≤70 (usa “–”, no “:”), metaDescription ≤160.`);
@@ -201,7 +194,6 @@ Regola dura: niente frasi troncate. Ogni paragrafo finisce con un punto.
 Rispondi SOLO JSON.
 `.trim();
 }
-/* ============================ */
 
 export const generateShopifyHtml = async (
   imageB64: string,
@@ -216,10 +208,10 @@ export const generateShopifyHtml = async (
     inlineData: { mimeType: "image/jpeg", data: base64Data },
   };
 
-  // ⚠️ QUI DEVI INCOLLARE IL TUO basePrompt “elegante” COMPLETO (quello lungo),
-  // non accorciarlo e non metterlo in variabili vuote.
+  // ✅ IMPORTANTISSIMO: deve essere un template literal completo con backtick
   const basePrompt = `
-[INCOLLA QUI IL TUO PROMPT LUNGO "ELEGANTE" COMPLETO, IDENTICO A PRIMA]
+[INCOLLA QUI IL TUO PROMPT LUNGO COMPLETO, QUELLO "ELEGANTE", SENZA TAGLI]
+Tema/contesto: ${bggInfo}
 `.trim();
 
   async function callModel(prompt: string): Promise<Output> {
@@ -251,11 +243,9 @@ export const generateShopifyHtml = async (
     parsed.html1 = stripMarkdownAccident(parsed.html1);
     parsed.html2 = stripMarkdownAccident(parsed.html2);
 
-    // Always clean html3
     parsed.html3 = stripMarkdownAccident(parsed.html3);
     parsed.html3 = stripHtmlTags(parsed.html3);
 
-    // SEO meta sanitize (robust)
     parsed.seoTitle = clamp(normalizeSeoTitle(parsed.seoTitle), 70);
     parsed.metaDescription = clamp(parsed.metaDescription ?? "", 160);
 
@@ -263,13 +253,14 @@ export const generateShopifyHtml = async (
   }
 
   let lastErr: ValidationErrors | null = null;
+  let lastOut: Output | undefined;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const prompt = attempt === 1 ? basePrompt : buildRepairPrompt(basePrompt, lastErr!);
-
+    const prompt = attempt === 1 ? basePrompt : buildRepairPrompt(basePrompt, lastErr!, lastOut);
     const out = await callModel(prompt);
-    const err = validateOutput(out);
+    lastOut = out;
 
+    const err = validateOutput(out);
     if (!hasErrors(err)) return out;
 
     console.warn(`Attempt ${attempt} failed`, err);
