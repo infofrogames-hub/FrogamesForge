@@ -26,7 +26,7 @@ function getSectionId(html: string): string | null {
 }
 
 /* ============================
-   SEO TITLE SANITIZATION (NEW)
+   SEO TITLE SANITIZATION
    ============================ */
 function normalizeSeoTitle(input: string): string {
   return (input ?? "")
@@ -37,7 +37,9 @@ function normalizeSeoTitle(input: string): string {
 
 function clamp(input: string, max: number): string {
   const s = (input ?? "").trim();
-  return s.length <= max ? s : s.slice(0, max).replace(/\s+\S*$/, "").trim();
+  if (s.length <= max) return s;
+  // taglia senza spezzare l’ultima parola
+  return s.slice(0, max).replace(/\s+\S*$/, "").trim();
 }
 /* ============================ */
 
@@ -55,10 +57,8 @@ function validateOutput(out: Output): ValidationErrors {
   if (!out.html1.includes('<section id="fg-')) err.html1.push('Manca <section id="fg-');
   if (!out.html2.includes('<section id="fg-')) err.html2.push('Manca <section id="fg-');
 
-  if (!out.html1.includes("<style>") || !out.html1.includes("</style>"))
-    err.html1.push("Manca <style>...</style>");
-  if (!out.html2.includes("<style>") || !out.html2.includes("</style>"))
-    err.html2.push("Manca <style>...</style>");
+  if (!out.html1.includes("<style>") || !out.html1.includes("</style>")) err.html1.push("Manca <style>...</style>");
+  if (!out.html2.includes("<style>") || !out.html2.includes("</style>")) err.html2.push("Manca <style>...</style>");
 
   // grid + media
   if (!/\.fg-grid\b/.test(out.html1) || !/@media\s*\(/.test(out.html1))
@@ -66,27 +66,19 @@ function validateOutput(out: Output): ValidationErrors {
   if (!/\.fg-grid\b/.test(out.html2) || !/@media\s*\(/.test(out.html2))
     err.html2.push("Manca .fg-grid con @media (1/2/3 colonne) scoped");
 
-  // contrast lock (tollerante)
+  // contrast lock (id-specific) — tolerant
   const id1 = getSectionId(out.html1);
   if (!id1) err.html1.push("ID section html1 non trovato");
   else {
-    const lock1 = new RegExp(
-      `#${id1}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`,
-      "i"
-    );
-    if (!lock1.test(out.html1))
-      err.html1.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
+    const lock1 = new RegExp(`#${id1}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`, "i");
+    if (!lock1.test(out.html1)) err.html1.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
   }
 
   const id2 = getSectionId(out.html2);
   if (!id2) err.html2.push("ID section html2 non trovato");
   else {
-    const lock2 = new RegExp(
-      `#${id2}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`,
-      "i"
-    );
-    if (!lock2.test(out.html2))
-      err.html2.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
+    const lock2 = new RegExp(`#${id2}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`, "i");
+    if (!lock2.test(out.html2)) err.html2.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
   }
 
   // no markdown
@@ -94,48 +86,42 @@ function validateOutput(out: Output): ValidationErrors {
   if (/\*\*|```|`/.test(out.html2)) err.html2.push("Contiene markdown (** o `)");
   if (/\*\*|```|`/.test(out.html3)) err.html3.push("html3 contiene markdown (vietato)");
 
-  // html3 plain text
-  if (/<\/?[a-z][\s\S]*>/i.test(out.html3))
-    err.html3.push("html3 contiene HTML (vietato)");
+  // html3 must be plain text
+  if (/<\/?[a-z][\s\S]*>/i.test(out.html3)) err.html3.push("html3 contiene HTML (vietato)");
 
-  // paragraphs
+  // paragraphs exact
   const p1 = out.html1.match(/<p\s+class="fg-p">[\s\S]*?<\/p>/gi) ?? [];
-  if (p1.length !== 4)
-    err.html1.push(`html1 deve avere 4 paragrafi fg-p (trovati ${p1.length})`);
+  if (p1.length !== 4) err.html1.push(`html1 deve avere 4 paragrafi fg-p (trovati ${p1.length})`);
   if (p1.length >= 2 && !p1[1].includes("È un gioco da tavolo"))
     err.html1.push('Manca “È un gioco da tavolo” nel 2° paragrafo');
 
   const p2 = out.html2.match(/<p\s+class="fg-p">[\s\S]*?<\/p>/gi) ?? [];
-  if (p2.length !== 3)
-    err.html2.push(`html2 deve avere 3 paragrafi fg-p (trovati ${p2.length})`);
+  if (p2.length !== 3) err.html2.push(`html2 deve avere 3 paragrafi fg-p (trovati ${p2.length})`);
 
-  if (!/class="fg-seo"/.test(out.html2))
-    err.html2.push("Manca blocco SEO long .fg-seo");
+  // seo long
+  if (!/class="fg-seo"/.test(out.html2)) err.html2.push("Manca blocco SEO long .fg-seo");
 
-  // cards
-  if (countMatches(out.html1, /class="fg-card"/g) !== 6)
-    err.html1.push("html1 deve avere 6 card");
-  if (countMatches(out.html2, /class="fg-card"/g) !== 6)
-    err.html2.push("html2 deve avere 6 card");
+  // cards count
+  const c1 = countMatches(out.html1, /class="fg-card"/g);
+  if (c1 !== 6) err.html1.push("html1 deve avere 6 card");
 
-  // chips
+  const c2 = countMatches(out.html2, /class="fg-card"/g);
+  if (c2 !== 6) err.html2.push("html2 deve avere 6 card");
+
+  // chips count
   const chips = countMatches(out.html1, /class="fg-chip"/g);
-  if (chips < 4 || chips > 5)
-    err.html1.push(`html1 chips devono essere 4–5 (trovate ${chips})`);
+  if (chips < 4 || chips > 5) err.html1.push(`html1 chips devono essere 4–5 (trovate ${chips})`);
 
-  // hierarchy
+  // hierarchy checks
   if (!/class="fg-sub"/.test(out.html1)) err.html1.push("Manca fg-sub");
   if (!/class="fg-tagline"/.test(out.html1)) err.html1.push("Manca fg-tagline");
   if (!/class="fg-sub"/.test(out.html2)) err.html2.push("Manca fg-sub");
   if (!/class="fg-tagline"/.test(out.html2)) err.html2.push("Manca fg-tagline");
 
-  // meta
-  if ((out.seoTitle ?? "").length > 70)
-    err.meta.push(`seoTitle > 70 (${out.seoTitle.length})`);
-  if ((out.metaDescription ?? "").length > 160)
-    err.meta.push(`metaDescription > 160 (${out.metaDescription.length})`);
-  if (/:/.test(out.seoTitle ?? ""))
-    err.meta.push("seoTitle contiene ':' (vietato, usa –)");
+  // meta limits
+  if ((out.seoTitle ?? "").length > 70) err.meta.push(`seoTitle > 70 (${out.seoTitle.length})`);
+  if ((out.metaDescription ?? "").length > 160) err.meta.push(`metaDescription > 160 (${out.metaDescription.length})`);
+  if (/:/.test(out.seoTitle ?? "")) err.meta.push("seoTitle contiene ':' (vietato, usa –)");
 
   return err;
 }
@@ -143,6 +129,79 @@ function validateOutput(out: Output): ValidationErrors {
 function hasErrors(e: ValidationErrors): boolean {
   return Boolean(e.html1.length || e.html2.length || e.html3.length || e.meta.length);
 }
+
+/* ============================
+   ✅ ONLY CHANGE: smarter repair
+   If structural errors exist => FULL REGEN
+   ============================ */
+function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
+  const all = [...e.html1, ...e.html2, ...e.html3, ...e.meta];
+
+  const hasStructuralFailure =
+    all.some((x) => x.includes('Manca <section id="fg-')) ||
+    all.some((x) => x.includes("Manca <style>")) ||
+    all.some((x) => x.includes("Manca .fg-grid")) ||
+    all.some((x) => x.includes("ID section")) ||
+    all.some((x) => x.includes("paragrafi fg-p (trovati 0)"));
+
+  // Se manca la struttura, NON micro-riparare: rigenera tutto.
+  if (hasStructuralFailure) {
+    return `
+${basePrompt}
+
+================================================
+REPAIR (ALTISSIMA PRIORITÀ)
+================================================
+La struttura è stata violata (section/style/grid/paragraphs mancanti).
+RIGENERA COMPLETAMENTE l'output rispettando TUTTI i vincoli e la STRUTTURA OBBLIGATORIA.
+Non fare micro-fix. Non spiegare nulla. Rispondi SOLO JSON valido.
+`.trim();
+  }
+
+  // altrimenti micro-fix come prima
+  const fixes: string[] = [];
+
+  if (e.html1.some((x) => x.includes("È un gioco da tavolo"))) {
+    fixes.push(
+      `- RISCRIVI SOLO il 2° <p class="fg-p"> di html1: deve iniziare con "È un gioco da tavolo" e finire con punto.`
+    );
+  }
+  if (e.html1.some((x) => x.includes("chips"))) {
+    fixes.push(
+      `- RIGENERA SOLO la riga chips di html1: ESATTAMENTE 4–5 <span class="fg-chip">...</span> dentro <div class="fg-chips">.`
+    );
+  }
+  if (e.html2.some((x) => x.includes("SEO long"))) {
+    fixes.push(
+      `- In html2 aggiungi <p class="fg-seo"> (2–3 frasi, 380–520 caratteri) con "gioco da tavolo" + 4 keyword naturali.`
+    );
+  }
+  if (e.html3.length) {
+    fixes.push(`- html3: SOLO TESTO PURO (no HTML, no markdown, no asterischi).`);
+  }
+  if (e.meta.length) {
+    fixes.push(`- seoTitle ≤70 (usa “–”, no “:”), metaDescription ≤160.`);
+  }
+
+  const repairInstructions =
+    fixes.length > 0 ? fixes.join("\n") : `- Rigenera completamente l'output rispettando TUTTI i vincoli.`;
+
+  return `
+${basePrompt}
+
+================================================
+REPAIR (ALTISSIMA PRIORITÀ)
+================================================
+Hai fallito la validazione. Correggi e restituisci SOLO JSON valido, senza spiegazioni.
+
+CORREGGI SOLO QUESTE COSE (non cambiare estetica/layout se già presenti):
+${repairInstructions}
+
+Regola dura: niente frasi troncate. Ogni paragrafo finisce con un punto.
+Rispondi SOLO JSON.
+`.trim();
+}
+/* ============================ */
 
 export const generateShopifyHtml = async (
   imageB64: string,
@@ -156,6 +215,12 @@ export const generateShopifyHtml = async (
   const imagePart = {
     inlineData: { mimeType: "image/jpeg", data: base64Data },
   };
+
+  // ⚠️ QUI DEVI INCOLLARE IL TUO basePrompt “elegante” COMPLETO (quello lungo),
+  // non accorciarlo e non metterlo in variabili vuote.
+  const basePrompt = `
+[INCOLLA QUI IL TUO PROMPT LUNGO "ELEGANTE" COMPLETO, IDENTICO A PRIMA]
+`.trim();
 
   async function callModel(prompt: string): Promise<Output> {
     const response = await ai.models.generateContent({
@@ -178,25 +243,31 @@ export const generateShopifyHtml = async (
       },
     });
 
-    const parsed = JSON.parse(response.text!) as Output;
+    const textOutput = response.text;
+    if (!textOutput) throw new Error("Errore generazione");
+
+    const parsed = JSON.parse(textOutput) as Output;
 
     parsed.html1 = stripMarkdownAccident(parsed.html1);
     parsed.html2 = stripMarkdownAccident(parsed.html2);
 
+    // Always clean html3
     parsed.html3 = stripMarkdownAccident(parsed.html3);
     parsed.html3 = stripHtmlTags(parsed.html3);
 
-    // ✅ FIX DEFINITIVO SEO TITLE
+    // SEO meta sanitize (robust)
     parsed.seoTitle = clamp(normalizeSeoTitle(parsed.seoTitle), 70);
     parsed.metaDescription = clamp(parsed.metaDescription ?? "", 160);
 
     return parsed;
-  };
+  }
 
   let lastErr: ValidationErrors | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const out = await callModel("PROMPT OMITTED FOR BREVITY");
+    const prompt = attempt === 1 ? basePrompt : buildRepairPrompt(basePrompt, lastErr!);
+
+    const out = await callModel(prompt);
     const err = validateOutput(out);
 
     if (!hasErrors(err)) return out;
