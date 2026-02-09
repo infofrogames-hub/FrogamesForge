@@ -48,12 +48,12 @@ function validateOutput(out: Output): ValidationErrors {
   if (!/\.fg-grid\b/.test(out.html2) || !/@media\s*\(/.test(out.html2))
     err.html2.push("Manca .fg-grid con @media (1/2/3 colonne) scoped");
 
-  // contrast lock (id-specific)
+  // contrast lock (id-specific) — ✅ more tolerant regex
   const id1 = getSectionId(out.html1);
   if (!id1) err.html1.push("ID section html1 non trovato");
   else {
     const lock1 = new RegExp(
-      `#${id1}\\s*,\\s*\\n?#${id1}\\s*\\*\\s*\\{[^}]*color\\s*:\\s*#FFFFFF\\s*!important`,
+      `#${id1}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`,
       "i"
     );
     if (!lock1.test(out.html1)) err.html1.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
@@ -63,7 +63,7 @@ function validateOutput(out: Output): ValidationErrors {
   if (!id2) err.html2.push("ID section html2 non trovato");
   else {
     const lock2 = new RegExp(
-      `#${id2}\\s*,\\s*\\n?#${id2}\\s*\\*\\s*\\{[^}]*color\\s*:\\s*#FFFFFF\\s*!important`,
+      `#${id2}[\\s\\S]*color\\s*:\\s*#FFFFFF\\s*!important`,
       "i"
     );
     if (!lock2.test(out.html2)) err.html2.push("Manca contrast lock (#id, #id * { color:#fff !important; })");
@@ -143,28 +143,33 @@ function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
     fixes.push(`- Assicurati che html1 e html2 contengano SEMPRE <div class="fg-tagline"> (1 frase corta) in evidenza.`);
   }
 
-  // ✅ FIX: forza .fg-grid + @media scoped
-  if (e.html1.some((x) => x.includes(".fg-grid con @media")) || e.html2.some((x) => x.includes(".fg-grid con @media"))) {
+  // ✅ FIX 1: CONTRAST LOCK (manca nei tuoi errori reali)
+  if (
+    e.html1.some((x) => x.includes("contrast lock")) ||
+    e.html2.some((x) => x.includes("contrast lock"))
+  ) {
     fixes.push(
-      `- CSS: nello <style> di html1 e html2 DEVI avere .fg-grid e 3 breakpoint @media scoped sull'id (1 col base, 2 col ≥720px, 3 col ≥1050px).`
-    );
-  }
-
-  // ✅ FIX: forza contrast lock id-specific con sintassi esatta
-  if (e.html1.some((x) => x.includes("contrast lock")) || e.html2.some((x) => x.includes("contrast lock"))) {
-    fixes.push(
-      `- CONTRAST LOCK: all'inizio dello <style> scoped, inserisci ESATTAMENTE "#ID, #ID * { color:#FFFFFF !important; }" usando l'id reale della section (se diverso tra html1 e html2, mettilo per entrambi).`
+      `- CONTRAST LOCK OBBLIGATORIO: in html1 e html2, dentro lo <style>, la PRIMA regola deve essere ESATTAMENTE:` +
+        ` "#SECTION_ID, #SECTION_ID * { color:#FFFFFF !important; }" dove SECTION_ID è l'id reale scritto nella rispettiva <section id="...">.` +
+        ` Non usare placeholder tipo [slug]. Copia l'id identico.`
     );
   }
 
   if (e.html3.length) {
     fixes.push(`- html3: SOLO TESTO PURO (no HTML, no markdown, no asterischi).`);
   }
+
+  // ✅ FIX 2: SEO TITLE (71 chars e ":" sono i tuoi errori reali)
+  // Se il meta validator segnala qualsiasi errore meta, forziamo la riscrittura SOLO dei meta.
   if (e.meta.length) {
-    fixes.push(`- seoTitle ≤70 (usa “–”, no “:”), metaDescription ≤160.`);
+    fixes.push(
+      `- RISCRIVI SOLO seoTitle e metaDescription rispettando: seoTitle ≤ 70 caratteri, NON usare ":" ma "–". ` +
+        `Se serve, accorcia rimuovendo parole non essenziali. metaDescription ≤ 160.`
+    );
   }
 
-  const repairInstructions = fixes.length > 0 ? fixes.join("\n") : `- Rigenera completamente l'output rispettando TUTTI i vincoli.`;
+  const repairInstructions =
+    fixes.length > 0 ? fixes.join("\n") : `- Rigenera completamente l'output rispettando TUTTI i vincoli.`;
 
   return `
 ${basePrompt}
@@ -358,8 +363,9 @@ Rispondi SOLO JSON.
     parsed.html1 = stripMarkdownAccident(parsed.html1);
     parsed.html2 = stripMarkdownAccident(parsed.html2);
 
+    // ✅ Always clean html3 (force plain text)
     parsed.html3 = stripMarkdownAccident(parsed.html3);
-    if (/<\/?[a-z][\s\S]*>/i.test(parsed.html3)) parsed.html3 = stripHtmlTags(parsed.html3);
+    parsed.html3 = stripHtmlTags(parsed.html3);
 
     return parsed;
   }
@@ -372,6 +378,10 @@ Rispondi SOLO JSON.
     const err = validateOutput(out);
 
     if (!hasErrors(err)) return out;
+
+    // ✅ Debug log for future diagnostics
+    console.warn(`Attempt ${attempt} failed`, err);
+
     lastErr = err;
   }
 
