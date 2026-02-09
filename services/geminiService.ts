@@ -2,18 +2,17 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { GenerationResult } from "../types";
 
 type Output = GenerationResult;
-
 const MAX_ATTEMPTS = 3;
-
-function stripHtmlTags(input: string): string {
-  return input.replace(/<\/?[^>]+>/g, "").replace(/\n{3,}/g, "\n\n").trim();
-}
 
 function stripMarkdownAccident(input: string): string {
   return input
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/`{1,3}([^`]+)`{1,3}/g, "$1")
     .trim();
+}
+
+function stripHtmlTags(input: string): string {
+  return input.replace(/<\/?[^>]+>/g, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function countMatches(haystack: string, re: RegExp): number {
@@ -49,7 +48,7 @@ function validateOutput(out: Output): ValidationErrors {
   if (!/\.fg-grid\b/.test(out.html2) || !/@media\s*\(/.test(out.html2))
     err.html2.push("Manca .fg-grid con @media (1/2/3 colonne) scoped");
 
-  // contrast lock
+  // contrast lock (id-specific)
   const id1 = getSectionId(out.html1);
   if (!id1) err.html1.push("ID section html1 non trovato");
   else {
@@ -81,15 +80,13 @@ function validateOutput(out: Output): ValidationErrors {
   // paragraphs exact
   const p1 = out.html1.match(/<p\s+class="fg-p">[\s\S]*?<\/p>/gi) ?? [];
   if (p1.length !== 4) err.html1.push(`html1 deve avere 4 paragrafi fg-p (trovati ${p1.length})`);
-
-  // p2 must contain phrase exactly
   if (p1.length >= 2 && !p1[1].includes("È un gioco da tavolo"))
     err.html1.push('Manca “È un gioco da tavolo” nel 2° paragrafo');
 
   const p2 = out.html2.match(/<p\s+class="fg-p">[\s\S]*?<\/p>/gi) ?? [];
   if (p2.length !== 3) err.html2.push(`html2 deve avere 3 paragrafi fg-p (trovati ${p2.length})`);
 
-  // html2 must include seo long
+  // seo long
   if (!/class="fg-seo"/.test(out.html2)) err.html2.push("Manca blocco SEO long .fg-seo");
 
   // cards count
@@ -99,9 +96,15 @@ function validateOutput(out: Output): ValidationErrors {
   const c2 = countMatches(out.html2, /class="fg-card"/g);
   if (c2 !== 6) err.html2.push(`html2 deve avere 6 card (trovate ${c2})`);
 
-  // chips count – ora contiamo span.fg-chip
+  // chips count: span.fg-chip
   const chips = countMatches(out.html1, /class="fg-chip"/g);
   if (chips < 4 || chips > 5) err.html1.push(`html1 chips devono essere 4–5 (trovate ${chips})`);
+
+  // ensure subtitle & tagline exist (beauty/gerarchia)
+  if (!/class="fg-sub"/.test(out.html1)) err.html1.push("Manca sottotitolo fg-sub (gerarchia)");
+  if (!/class="fg-tagline"/.test(out.html1)) err.html1.push("Manca frase centrale fg-tagline (gerarchia)");
+  if (!/class="fg-sub"/.test(out.html2)) err.html2.push("Manca sottotitolo fg-sub (gerarchia)");
+  if (!/class="fg-tagline"/.test(out.html2)) err.html2.push("Manca frase centrale fg-tagline (gerarchia)");
 
   // meta limits
   if ((out.seoTitle ?? "").length > 70) err.meta.push(`seoTitle > 70 (${out.seoTitle.length})`);
@@ -116,33 +119,32 @@ function hasErrors(e: ValidationErrors): boolean {
 }
 
 function buildRepairPrompt(basePrompt: string, e: ValidationErrors): string {
-  // repair SUPER mirato: NON toccare estetica, solo pezzi mancanti
   const fixes: string[] = [];
 
-  if (e.html1.some(x => x.includes("Manca “È un gioco da tavolo”"))) {
+  if (e.html1.some(x => x.includes("È un gioco da tavolo"))) {
     fixes.push(`- RISCRIVI SOLO il 2° <p class="fg-p"> di html1: deve iniziare con "È un gioco da tavolo" e finire con punto.`);
   }
   if (e.html1.some(x => x.includes("chips"))) {
-    fixes.push(`- RIGENERA SOLO la riga chips di html1: dentro <div class="fg-chips"> inserisci ESATTAMENTE 4–5 span così: <span class="fg-chip">testo</span>.`);
+    fixes.push(`- RIGENERA SOLO la riga chips di html1: ESATTAMENTE 4–5 <span class="fg-chip">...</span> dentro <div class="fg-chips">.`);
   }
-
-  if (e.html2.some(x => x.includes("Manca blocco SEO long"))) {
+  if (e.html2.some(x => x.includes("SEO long"))) {
     fixes.push(`- In html2 aggiungi <p class="fg-seo"> (2–3 frasi, 380–520 caratteri) con "gioco da tavolo" + 4 keyword naturali.`);
   }
-
+  if (e.html1.some(x => x.includes("fg-sub")) || e.html2.some(x => x.includes("fg-sub"))) {
+    fixes.push(`- Assicurati che html1 e html2 contengano SEMPRE <p class="fg-sub"> (1 riga) per la gerarchia.`);
+  }
+  if (e.html1.some(x => x.includes("fg-tagline")) || e.html2.some(x => x.includes("fg-tagline"))) {
+    fixes.push(`- Assicurati che html1 e html2 contengano SEMPRE <div class="fg-tagline"> (1 frase corta) in evidenza.`);
+  }
   if (e.html3.length) {
     fixes.push(`- html3: SOLO TESTO PURO (no HTML, no markdown, no asterischi).`);
   }
-
   if (e.meta.length) {
     fixes.push(`- seoTitle ≤70 (usa “–”, no “:”), metaDescription ≤160.`);
   }
 
-  // se non abbiamo fixes (caso raro), chiediamo rigenerazione completa
   const repairInstructions =
-    fixes.length > 0
-      ? fixes.join("\n")
-      : `- Rigenera completamente l'output rispettando TUTTI i vincoli.`;
+    fixes.length > 0 ? fixes.join("\n") : `- Rigenera completamente l'output rispettando TUTTI i vincoli.`;
 
   return `
 ${basePrompt}
@@ -167,198 +169,144 @@ export const generateShopifyHtml = async (
   bggInfo: string
 ): Promise<GenerationResult> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const base64Data = imageB64.split(",")[1] || imageB64;
 
+  const base64Data = imageB64.split(",")[1] || imageB64;
   const imagePart = {
-    inlineData: {
-      mimeType: "image/jpeg",
-      data: base64Data,
-    },
+    inlineData: { mimeType: "image/jpeg", data: base64Data },
   };
 
-  // ✅ Prompt base: identico al tuo, ma con 2 micro-fix stabilità:
-  // 1) chips in span.fg-chip (così il validator le conta)
-  // 2) p2 html1 DEVE iniziare con "È un gioco da tavolo" (stringa fissa)
+  // ✅ Prompt “elegante”: blocca la gerarchia e il look con blueprint CSS
   const basePrompt = `
 Agisci come Master Copywriter SEO e Lead UI Designer per FroGames.
 Analizza i colori della scatola nell'immagine e il tema del gioco: ${bggInfo}.
 Obiettivo: descrizione Shopify premium, mobile-first, SEO forte, percorso di vendita chiaro, layout moderno e leggibile.
 
-OUTPUT: restituisci SOLO JSON con:
-- html1 (ATMOSFERA)
-- html2 (PERCHÉ FUNZIONA AL TAVOLO)
-- html3 (COME SI GIOCA: SOLO TESTO)
-- seoTitle
-- metaDescription
+OUTPUT: restituisci SOLO JSON con html1, html2, html3, seoTitle, metaDescription.
 
 ================================================
 REGOLE CRITICHE ANTI-ERRORI (ALTISSIMA PRIORITÀ)
 ================================================
-1) VIETATO MARKDOWN:
-   - NON usare **asterischi**, NON usare backtick, NON usare elenchi Markdown.
-   - Se vuoi enfasi: usa solo <strong> dentro html1/html2. In html3 niente enfasi.
-
-2) VIETATO TRONCARE:
-   - Se stai per superare i limiti, accorcia frasi e SEO long, ma NON lasciare frasi a metà.
-   - Ogni paragrafo deve finire con un punto.
-
-3) VIETATO “SCHEDA TECNICA”:
-   - Non inserire in nessun output righe tipo: giocatori, minuti, età, editore, lingua.
-   - Non inserire “CGE”, “Czech Games Edition” o simili se non fornito esplicitamente dall’utente.
-
-4) COERENZA DEI VINCOLI:
-   - Le card sono “micro-scene calde” stile Speakeasy / Dance of Ibexes.
-   - NON usare comandi freddi tipo “SCRUTA / LANCIA / ANALIZZA” come titoli card.
-   - NON usare titoli astratti tipo “TENSIONE/STRATEGIA” da soli.
+1) VIETATO MARKDOWN: niente **asterischi**, niente backtick, niente elenchi markdown.
+2) VIETATO TRONCARE: nessuna frase a metà, ogni paragrafo finisce con un punto.
+3) VIETATO SCHEDA TECNICA: niente righe giocatori/minuti/età/editore/lingua.
+4) Niente “CGE / Czech Games Edition” se non esplicitato dall’utente.
 
 ================================================
-VALIDAZIONE OUTPUT (MANDATORIA)
-================================================
-Se html1 o html2 NON contengono TUTTI questi elementi:
-- <section id="fg-
-- <style>
-- chiusura </style>
-- CSS scoped sull'id (usa #fg-[slug] ... oppure #fg-[slug]-2 ...)
-- .fg-grid con @media (mobile 1 col / tablet 2 col / desktop 3 col)
-
-ALLORA devi rigenerare internamente prima di rispondere.
-Non spiegare la rigenerazione. Rispondi solo con JSON valido.
-
-================================================
-STRUTTURA HTML OBBLIGATORIA
-================================================
-html1 e html2 DEVONO essere:
-<section id="fg-[slug]" class="fg-wrap"> ... </section>
-<style> ...CSS scoped solo su #fg-[slug]... </style>
-
-Vietato CSS globale. Vietato dipendere solo da inline-style.
-
-================================================
-CONTRASTO ASSOLUTO (ANTI TESTO NERO)
-================================================
-Nel CSS scoped inserisci SEMPRE, all’inizio:
-
-#fg-[slug],
-#fg-[slug] * {
-  color: #FFFFFF !important;
-}
-
-Per html2 usa l’id con suffisso -2:
-#fg-[slug]-2,
-#fg-[slug]-2 * { color:#FFFFFF !important; }
-
-Nessun testo può essere nero. Mai.
-
-================================================
-BACKGROUND & LOOK PREMIUM
-================================================
-- Estrai 3 colori dominanti dalla scatola (c1,c2,c3) e crea un gradiente elegante.
-- Usa glass soft, glow delicato, bordi arrotondati, ombre morbide.
-- Inserisci un separatore sottile tra sezioni:
-  <div class="fg-divider" aria-hidden="true"></div>
-
-================================================
-LAYOUT GRID OBBLIGATORIO (3x2 desktop)
-================================================
-.fg-grid deve essere una griglia vera e deve garantire:
-- mobile: 1 colonna
-- tablet ≥ 720px: 2 colonne
-- desktop ≥ 1050px: 3 colonne (3×2)
-
-Deve essere fatto con @media nel CSS scoped.
-
-================================================
-ANTI-MURO (MA SENZA SVUOTARE)
+STRUTTURA (OBBLIGATORIA)
 ================================================
 html1:
-- ESATTAMENTE 4 paragrafi principali class="fg-p"
-- ognuno 260–480 caratteri (non troppo corti)
-- max 2 frasi ciascuno
-- percorso: curiosità → immersione → differenza → target (con micro-gancio finale)
+<section id="fg-[slug]" class="fg-wrap">
+  <p class="fg-kicker">...</p>
+  <h2 class="fg-title">NOME GIOCO</h2>
+  <p class="fg-sub">Sottotitolo 1 riga</p>
+
+  <p class="fg-p">[1 HOOK]</p>
+  <p class="fg-p">[2 IMMERSIONE + SEO]</p>
+
+  <div class="fg-tagline">Frase centrale in evidenza (1 frase).</div>
+
+  <p class="fg-p">[3 DIFFERENZA / momento firma]</p>
+  <p class="fg-p">[4 TARGET “È il gioco per chi…”]</p>
+
+  <div class="fg-chips">
+    <span class="fg-chip">...</span>
+    <span class="fg-chip">...</span>
+    <span class="fg-chip">...</span>
+    <span class="fg-chip">...</span>
+    (opzionale 5a)
+  </div>
+
+  <div class="fg-divider" aria-hidden="true"></div>
+  <h3 class="fg-h3">Perché NOME GIOCO ti resta in testa</h3>
+
+  <div class="fg-grid">6 card</div>
+
+  <div class="fg-panel">Frase finale memorabile.</div>
+</section>
+<style>CSS scoped + @media + contrast lock</style>
 
 html2:
-- ESATTAMENTE 3 paragrafi principali class="fg-p"
-- stesse regole (260–480 caratteri, max 2 frasi)
-- percorso: razionalizzazione → scelte/rischio → payoff
+<section id="fg-[slug]-2" class="fg-wrap">
+  <p class="fg-kicker">...</p>
+  <h2 class="fg-title">Titolo tematico (NON ripetere nome)</h2>
+  <p class="fg-sub">Sottotitolo 1 riga</p>
+
+  <p class="fg-p">[1 CUORE]</p>
+  <p class="fg-p">[2 SCELTE & RISCHIO]</p>
+
+  <div class="fg-tagline">Frase centrale in evidenza (1 frase).</div>
+
+  <p class="fg-p">[3 PAYOFF]</p>
+
+  <h3 class="fg-h3">Dove ti premia</h3>
+  <div class="fg-grid">6 card</div>
+
+  <h3 class="fg-h3">Dove ti mette alla prova</h3>
+  <p class="fg-seo">SEO long 2–3 frasi.</p>
+
+  <div class="fg-panel">Frase finale memorabile.</div>
+</section>
+<style>CSS scoped + @media + contrast lock</style>
 
 ================================================
 SEO POSIZIONATA (OBBLIGATORIA)
 ================================================
-- html1, paragrafo 2: deve contenere testualmente “È un gioco da tavolo …” + categoria corretta.
-  REGOLA EXTRA STABILITÀ: il 2° paragrafo DEVE INIZIARE con le parole esatte: "È un gioco da tavolo"
-- Se pertinente deve comparire anche “gioco di carte” (una volta).
-- html2: deve includere un blocco SEO long class="fg-seo" (2–3 frasi, 380–520 caratteri)
-  che contenga “gioco da tavolo” + 4 keyword naturali coerenti (no elenco tecnico).
+- html1, 2° paragrafo: DEVE INIZIARE con le parole esatte "È un gioco da tavolo" e poi completare con categoria corretta.
+- Inserisci "gioco di carte" una sola volta se pertinente.
+- html2: <p class="fg-seo"> 2–3 frasi, 380–520 caratteri, contiene "gioco da tavolo" + 4 keyword naturali coerenti, senza elenco tecnico.
 - No keyword stuffing: max 1 keyword per frase.
 
 ================================================
-CARD CALDE (REGOLA DURA, STILE SPEAKEASY / DANCE OF IBEXES)
+CARD CALDE (micro-scene)
 ================================================
-Ogni card deve essere una micro-scena di tavolo:
-- Titolo: emoji + frase evocativa (massimo ~52 caratteri)
-- Testo: 1–2 frasi, massimo ~140 caratteri
-- Deve far sentire momento e payoff (tensione, scelta, soddisfazione)
+6 card per html1 e 6 card per html2.
+Ogni card:
+- Titolo: emoji + frase evocativa (max ~52 caratteri)
+- Testo: 1–2 frasi (max ~140 caratteri)
+- Deve far sentire il momento al tavolo, non comandi freddi.
 
 ================================================
-GRIGLIE
+GERARCHIA TESTO (OBBLIGATORIA: NO PIATTO)
 ================================================
-- html1: ESATTAMENTE 6 card esperienza
-- html2: ESATTAMENTE 6 card valore sui temi (senza essere fredde):
-  1) Strategia (scelta/gesto)
-  2) Combo (incastri/tempo)
-  3) Profondità (lettura/ritorno)
-  4) Flusso (ritmo)
-  5) Bilanciamento (inseguimento/rebound)
-  6) Decisioni (scelta dolorosa)
+- fg-title deve sembrare un hero: molto grande, peso forte, shadow.
+- fg-sub deve essere evidente ma secondario.
+- fg-tagline deve “staccare” visivamente (border-left + glow + font più grande).
+- fg-h3 deve separare chiaramente le sezioni.
+- Le card devono avere titolo più forte e testo più piccolo.
 
 ================================================
-CHIPS (OBBLIGO) — FORMATO OBBLIGATORIO
+CSS BLUEPRINT (OBBLIGATORIO)
 ================================================
-In html1 inserisci una riga chips class="fg-chips" con 4–5 pill.
-Le chips devono essere SOLO HTML e DEVONO usare ESATTAMENTE questo formato contabile:
-
-<div class="fg-chips">
-  <span class="fg-chip">...</span>
-  <span class="fg-chip">...</span>
-  <span class="fg-chip">...</span>
-  <span class="fg-chip">...</span>
-  (opzionale 5a)
-</div>
-
-Almeno 2 chip devono contenere keyword (coerenti) tra:
-“gioco da tavolo”, “gioco di carte”, “gioco competitivo”, “eurogame”, “deckbuilding”, “trick-taking”.
+Dentro lo <style> (scoped sull’id) DEVI includere questo stile base (puoi adattare i colori del gradiente, NON cambiare i valori chiave):
+- border-radius sezione: 28px
+- card border-radius: 26px (NON più basso)
+- ombre morbide premium sulle card (visibili)
+- hover leggero su desktop
+- padding e spacing generosi
+- griglia: 1 col mobile, 2 col ≥720px, 3 col ≥1050px (3x2)
+- divider sottile
+- panel finale più “morbido” e in risalto
 
 ================================================
-NO INVENTARE NUMERI
+CONTRASTO ASSOLUTO (ANTI TESTO NERO)
 ================================================
-Non inserire numeri specifici (componenti, carte, ore, scenari, ecc.)
-a meno che siano chiaramente verificabili. Se dubbio: ometti.
+All’inizio del CSS scoped, sempre:
+#fg-[slug], #fg-[slug] * { color:#FFFFFF !important; }
+e per html2:
+#fg-[slug]-2, #fg-[slug]-2 * { color:#FFFFFF !important; }
 
 ================================================
 HTML3 (COME SI GIOCA) — SOLO TESTO
 ================================================
-- Solo testo puro, niente HTML, niente markdown, niente asterischi
-- Titoli in MAIUSCOLO
-- Righe vuote tra paragrafi
-- Turno: 1) 2) 3) 4)
-- Breve e leggibile
-- Vietato inserire “giocatori/minuti/età/editore”.
+Solo testo puro. Niente HTML. Niente markdown. Titoli in MAIUSCOLO. Turno 1) 2) 3) 4).
 
 ================================================
 SEO META
 ================================================
-- seoTitle ≤ 70 caratteri, usa “–” mai “:”
-  formato: “[Nome] – hook + 1 keyword”
-- metaDescription ≤ 160 caratteri, nome + 1–2 keyword, tono FroGames
-  niente player count/durata
+seoTitle ≤ 70 (usa “–”, no “:”)
+metaDescription ≤ 160 (nome + 1–2 keyword, niente durata/player)
 
-================================================
-WEB (googleSearch)
-================================================
-Usa web SOLO per: tipologia, tema, 3–6 feature distintive.
-Non citare fonti esterne. Non dire “BGG/Google/recensioni”.
-
-RISPOSTA: SOLO JSON con "html1", "html2", "html3", "seoTitle", "metaDescription".
+Rispondi SOLO JSON.
 `.trim();
 
   async function callModel(prompt: string): Promise<Output> {
@@ -387,14 +335,11 @@ RISPOSTA: SOLO JSON con "html1", "html2", "html3", "seoTitle", "metaDescription"
 
     const parsed = JSON.parse(textOutput) as Output;
 
-    // anti-markdown accidentale
     parsed.html1 = stripMarkdownAccident(parsed.html1);
     parsed.html2 = stripMarkdownAccident(parsed.html2);
 
     parsed.html3 = stripMarkdownAccident(parsed.html3);
-    if (/<\/?[a-z][\s\S]*>/i.test(parsed.html3)) {
-      parsed.html3 = stripHtmlTags(parsed.html3);
-    }
+    if (/<\/?[a-z][\s\S]*>/i.test(parsed.html3)) parsed.html3 = stripHtmlTags(parsed.html3);
 
     return parsed;
   }
@@ -403,7 +348,6 @@ RISPOSTA: SOLO JSON con "html1", "html2", "html3", "seoTitle", "metaDescription"
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const prompt = attempt === 1 ? basePrompt : buildRepairPrompt(basePrompt, lastErr!);
-
     const out = await callModel(prompt);
     const err = validateOutput(out);
 
